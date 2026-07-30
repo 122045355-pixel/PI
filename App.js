@@ -1,114 +1,156 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import DashboardScreen from './screens/DashboardScreen';
 import DocumentsScreen from './screens/DocumentsScreen';
 import TeamsScreen from './screens/TeamsScreen';
 import DocumentDetailScreen from './screens/DocumentDetailScreen';
+import LoginScreen from './screens/LoginScreen';
+import { getCaseDocuments, getCases, getDocumentView, getProfile, login, logout } from './services/apiClient';
 import theme from './theme';
 
-const teams = [
-  {
-    id: 'team-legal',
-    name: 'Legal & Compliance',
-    description: 'Contratos, políticas y aprobaciones regulatorias.',
-    color: '#6366f1',
-    members: ['Ana Torres', 'Luis Vega', 'Marta Ruiz'],
-  },
-  {
-    id: 'team-sales',
-    name: 'Ventas',
-    description: 'Ofertas, acuerdos comerciales y documentación de cierre.',
-    color: '#0f766e',
-    members: ['Diego Mora', 'Paula Sol', 'Nico Díaz'],
-  },
-  {
-    id: 'team-ops',
-    name: 'Operaciones',
-    description: 'Procesos internos, SOPs y trazabilidad de cambios.',
-    color: '#dc2626',
-    members: ['Sofía Lee', 'Tomás Cruz', 'Elena Paredes'],
-  },
-];
+const rolePermissions = {
+  interesado: ['Ver documentos personales propios', 'Ver libelos propios', 'Firmar cuando sea solicitado'],
+  testigo: ['Ver identificacion propia', 'Ver libelos propios', 'Firmar cuando sea solicitado'],
+  abogado: ['Ver libelos de clientes asignados', 'Consultar estado de expediente'],
+  juez: ['Ver casos activos', 'Firmar documentos asignados', 'Descarga solo en web'],
+  notario: ['Acceso documental completo', 'Firmar y autorizar', 'Descarga solo en web'],
+  admin_ti: ['Gestion tecnica', 'Auditoria operativa', 'Sin descarga movil'],
+  admin: ['Gestion tecnica', 'Auditoria operativa', 'Sin descarga movil'],
+};
 
-const initialDocuments = [
-  {
-    id: 'doc-1',
-    title: 'Contrato de Proveedor',
-    description: 'Documento legal con aprobación de comité y firma digital pendiente.',
-    status: 'pending_review',
-    currentVersion: '2.1',
-    category: 'Legal',
+function normalizeDocument(document, caseItem) {
+  return {
+    id: String(document.id),
+    apiId: document.id,
+    title: document.title,
+    description: document.description || 'Documento legal protegido por permisos de rol.',
+    status: document.status || 'draft',
+    currentVersion: String(document.current_version || 0),
+    category: document.classification || 'legal',
     fileType: 'PDF',
-    fileSize: '2.4 MB',
-    updatedAt: 'Hace 2 h',
-    teamId: 'team-legal',
-    teamName: 'Legal & Compliance',
-    tags: ['contrato', 'firma'],
-    workflow: ['Revisión jurídica', 'Aprobación ejecutiva'],
-    signatures: ['Ana Torres'],
-    versions: ['2.1', '2.0', '1.9'],
-  },
-  {
-    id: 'doc-2',
-    title: 'Plan de Lanzamiento',
-    description: 'Resumen operativo para el lanzamiento del nuevo producto.',
-    status: 'approved',
-    currentVersion: '4.0',
-    category: 'Operaciones',
-    fileType: 'DOCX',
-    fileSize: '1.1 MB',
-    updatedAt: 'Hoy',
-    teamId: 'team-sales',
-    teamName: 'Ventas',
-    tags: ['lanzamiento', 'ventas'],
-    workflow: ['Aprobación comercial', 'Validación marketing'],
-    signatures: ['Diego Mora', 'Paula Sol'],
-    versions: ['4.0', '3.8', '3.4'],
-  },
-  {
-    id: 'doc-3',
-    title: 'Manual de Calidad',
-    description: 'Procedimiento actualizado para auditorías internas y validaciones.',
-    status: 'draft',
-    currentVersion: '1.3',
-    category: 'Operaciones',
-    fileType: 'PDF',
-    fileSize: '860 KB',
-    updatedAt: 'Ayer',
-    teamId: 'team-ops',
-    teamName: 'Operaciones',
-    tags: ['calidad', 'revision'],
-    workflow: ['Revisión de procesos'],
-    signatures: [],
-    versions: ['1.3', '1.2', '1.1'],
-  },
-];
+    fileSize: 'Protegido',
+    updatedAt: document.updated_at ? new Date(document.updated_at).toLocaleDateString() : 'Sin fecha',
+    teamId: `case-${document.case_id}`,
+    teamName: caseItem?.title || `Caso ${document.case_id}`,
+    tags: [document.document_type || 'documento', document.classification || 'legal'],
+    workflow: [
+      document.requires_approval ? 'Requiere visto bueno' : 'Sin visto bueno requerido',
+      document.requires_signature ? 'Requiere firma digital' : 'Sin firma requerida',
+    ],
+    signatures: document.status === 'signed' ? ['Firma registrada'] : [],
+    versions: [String(document.current_version || 0)],
+    downloadAllowed: false,
+  };
+}
 
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [selectedTeamId, setSelectedTeamId] = useState('all');
-  const [selectedDocumentId, setSelectedDocumentId] = useState(initialDocuments[0].id);
+  const [selectedDocumentId, setSelectedDocumentId] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [cases, setCases] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadProtectedData = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const profile = await getProfile();
+      const allowedCases = await getCases();
+      const documentsByCase = await Promise.all(
+        allowedCases.map(async (caseItem) => {
+          const caseDocuments = await getCaseDocuments(caseItem.id);
+          return caseDocuments.map((document) => normalizeDocument(document, caseItem));
+        })
+      );
+
+      const visibleDocuments = documentsByCase.flat();
+      setCurrentUser({
+        id: profile.user_id,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        permissions: rolePermissions[profile.role] || ['Consulta limitada por API'],
+      });
+      setCases(allowedCases);
+      setDocuments(visibleDocuments);
+      setSelectedDocumentId(visibleDocuments[0]?.id || null);
+    } catch (loadError) {
+      await logout();
+      setCurrentUser(null);
+      setCases([]);
+      setDocuments([]);
+      setError(loadError.message || 'No fue posible cargar la sesion.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProtectedData();
+  }, []);
+
+  const teams = useMemo(() => {
+    return cases.map((caseItem) => ({
+      id: `case-${caseItem.id}`,
+      name: caseItem.title,
+      description: caseItem.description || `Estado: ${caseItem.status}`,
+      color: theme.colors.primary,
+      members: [],
+    }));
+  }, [cases]);
 
   const filteredDocuments = useMemo(() => {
     if (selectedTeamId === 'all') {
-      return initialDocuments;
+      return documents;
     }
 
-    return initialDocuments.filter((doc) => doc.teamId === selectedTeamId);
-  }, [selectedTeamId]);
+    return documents.filter((doc) => doc.teamId === selectedTeamId);
+  }, [documents, selectedTeamId]);
 
   const selectedDocument = useMemo(() => {
-    return initialDocuments.find((doc) => doc.id === selectedDocumentId) || filteredDocuments[0];
-  }, [filteredDocuments, selectedDocumentId]);
+    return documents.find((doc) => doc.id === selectedDocumentId) || filteredDocuments[0];
+  }, [documents, filteredDocuments, selectedDocumentId]);
 
-  const openDocument = (doc) => {
+  const handleLogin = async (email, password) => {
+    await login(email, password);
+    await loadProtectedData();
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setCurrentUser(null);
+    setCases([]);
+    setDocuments([]);
+    setSelectedDocumentId(null);
+    setActiveView('dashboard');
+  };
+
+  const openDocument = async (doc) => {
     if (!doc) {
       return;
     }
 
-    setSelectedDocumentId(doc.id);
-    setActiveView('detail');
+    try {
+      const viewData = await getDocumentView(doc.apiId);
+      const enrichedDocument = {
+        ...doc,
+        downloadAllowed: viewData.download_allowed,
+        currentFile: viewData.current_file,
+      };
+
+      setDocuments((currentDocuments) => currentDocuments.map((item) => (
+        item.id === doc.id ? enrichedDocument : item
+      )));
+      setSelectedDocumentId(doc.id);
+      setActiveView('detail');
+    } catch (viewError) {
+      setError(viewError.message || 'No tienes permiso para visualizar este documento.');
+    }
   };
 
   const goToDocuments = () => {
@@ -123,14 +165,35 @@ export default function App() {
     setActiveView('dashboard');
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.centered}>
+        <ActivityIndicator color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Validando sesion segura</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <View style={styles.container}>
+        {error ? (
+          <Pressable style={styles.errorBanner} onPress={() => setError('')}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+          </Pressable>
+        ) : null}
+
         {activeView === 'dashboard' && (
           <DashboardScreen
-            documents={initialDocuments}
+            documents={documents}
             teams={teams}
+            currentUser={currentUser}
+            onLogout={handleLogout}
             onNavigateHome={goHome}
             onNavigateToDocuments={goToDocuments}
             onNavigateToTeams={goToTeams}
@@ -143,6 +206,7 @@ export default function App() {
             documents={filteredDocuments}
             teams={teams}
             selectedTeamId={selectedTeamId}
+            currentUser={currentUser}
             onSelectTeam={setSelectedTeamId}
             onOpenDocument={openDocument}
             onNavigateHome={goHome}
@@ -152,7 +216,7 @@ export default function App() {
         {activeView === 'teams' && (
           <TeamsScreen
             teams={teams}
-            documents={initialDocuments}
+            documents={documents}
             onSelectTeam={setSelectedTeamId}
             onOpenDocument={openDocument}
             onNavigateHome={goHome}
@@ -163,6 +227,7 @@ export default function App() {
         {activeView === 'detail' && selectedDocument && (
           <DocumentDetailScreen
             document={selectedDocument}
+            currentUser={currentUser}
             onNavigateBack={goToDocuments}
             onNavigateToDocuments={goToDocuments}
             onNavigateToTeams={goToTeams}
@@ -174,7 +239,7 @@ export default function App() {
           {[
             { id: 'dashboard', label: 'Inicio' },
             { id: 'documents', label: 'Documentos' },
-            { id: 'teams', label: 'Equipos' },
+            { id: 'teams', label: 'Casos' },
           ].map((item) => (
             <Pressable
               key={item.id}
@@ -198,6 +263,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+  },
+  loadingText: {
+    color: theme.colors.textSecondary,
+    marginTop: 10,
+    fontWeight: '700',
+  },
+  errorBanner: {
+    position: 'absolute',
+    top: 8,
+    left: 16,
+    right: 16,
+    zIndex: 20,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 14,
+    padding: 12,
+  },
+  errorBannerText: {
+    color: theme.colors.danger,
+    fontWeight: '700',
   },
   bottomNav: {
     position: 'absolute',

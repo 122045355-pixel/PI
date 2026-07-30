@@ -67,8 +67,16 @@ export async function login(email, password) {
   return payload.usuario;
 }
 
+export async function logout() {
+  await clearAccessToken();
+}
+
 export function getProfile() {
   return apiRequest('/api/perfil');
+}
+
+export function getCases() {
+  return apiRequest('/api/cases');
 }
 
 export function getCaseDocuments(caseId) {

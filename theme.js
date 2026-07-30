@@ -7,7 +7,7 @@ const colors = {
   textPrimary: '#1f2937',
   textSecondary: '#4b5563',
   muted: '#6b7280',
-  primary: '#7c3aed',
+  primary: '#63081d',
   primaryLight: '#ede9fe',
   secondary: '#a855f7',
   accent: '#8b5cf6',

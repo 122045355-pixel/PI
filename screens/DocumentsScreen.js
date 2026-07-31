@@ -3,7 +3,12 @@ import theme from '../theme';
 
 const statusStyles = {
   approved: { label: 'Aprobado', color: theme.colors.success, background: '#dcfce7' },
-  pending_review: { label: 'En revisión', color: theme.colors.warning, background: '#fef3c7' },
+  pending_review: { label: 'En revision', color: theme.colors.warning, background: '#fef3c7' },
+  under_review: { label: 'En revision', color: theme.colors.warning, background: '#fef3c7' },
+  uploaded: { label: 'Cargado', color: theme.colors.info, background: '#ccfbf1' },
+  signature_pending: { label: 'Firma pendiente', color: theme.colors.warning, background: '#fef3c7' },
+  signed: { label: 'Firmado', color: theme.colors.success, background: '#dcfce7' },
+  rejected: { label: 'Rechazado', color: theme.colors.danger, background: '#fee2e2' },
   draft: { label: 'Borrador', color: theme.colors.muted, background: theme.colors.surfaceMuted },
 };
 
@@ -11,6 +16,7 @@ export default function DocumentsScreen({
   documents,
   teams,
   selectedTeamId,
+  currentUser,
   onSelectTeam,
   onOpenDocument,
   onNavigateHome,
@@ -21,10 +27,11 @@ export default function DocumentsScreen({
 
   const renderHeader = (title, subtitle) => (
     <View style={styles.headerCard}>
-      <View>
-        <Text style={styles.headerEyebrow}>Gestión documental</Text>
+      <View style={styles.headerCopy}>
+        <Text style={styles.headerEyebrow}>Gestion documental</Text>
         <Text style={styles.headerTitle}>{title}</Text>
         <Text style={styles.headerSubtitle}>{subtitle}</Text>
+        <Text style={styles.roleLine}>Rol activo: {currentUser?.role}</Text>
       </View>
       <Pressable style={styles.ghostButton} onPress={onNavigateHome}>
         <Text style={styles.ghostButtonText}>Inicio</Text>
@@ -34,10 +41,10 @@ export default function DocumentsScreen({
 
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      {renderHeader('Documentos', 'Filtra por equipo y revisa el estado de cada documento.')}
+      {renderHeader('Documentos', 'La API solo devuelve archivos permitidos para tu rol.')}
 
       <View style={styles.searchBox}>
-        <Text style={styles.searchPlaceholder}>Buscar documentos o etiquetas</Text>
+        <Text style={styles.searchPlaceholder}>Descarga deshabilitada en movil · vista protegida</Text>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.teamFilters}>
@@ -59,8 +66,10 @@ export default function DocumentsScreen({
       </ScrollView>
 
       <View style={styles.sectionCard}>
-        {filteredDocuments.map((doc) => {
-          const status = statusStyles[doc.status];
+        {filteredDocuments.length === 0 ? (
+          <Text style={styles.emptyText}>No hay documentos visibles para este rol o expediente.</Text>
+        ) : filteredDocuments.map((doc) => {
+          const status = statusStyles[doc.status] || statusStyles.draft;
           return (
             <Pressable key={doc.id} style={styles.documentCard} onPress={() => onOpenDocument(doc)}>
               <View style={styles.documentCardTop}>
@@ -77,12 +86,12 @@ export default function DocumentsScreen({
                 <Text style={styles.documentMeta}>•</Text>
                 <Text style={styles.documentMeta}>v{doc.currentVersion}</Text>
                 <Text style={styles.documentMeta}>•</Text>
-                <Text style={styles.documentMeta}>{doc.fileType}</Text>
+                <Text style={styles.documentMeta}>{doc.category}</Text>
               </View>
               <View style={styles.documentActions}>
                 <Text style={styles.tagText}>{doc.tags.join(' · ')}</Text>
                 <Pressable style={styles.outlineButton} onPress={() => onOpenDocument(doc)}>
-                  <Text style={styles.outlineButtonText}>Abrir</Text>
+                  <Text style={styles.outlineButtonText}>Visualizar</Text>
                 </Pressable>
               </View>
             </Pressable>
@@ -114,11 +123,14 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 6,
   },
+  headerCopy: {
+    flex: 1,
+    marginRight: 10,
+  },
   headerEyebrow: {
     color: theme.colors.primary,
     fontSize: 12,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
     marginBottom: 4,
   },
   headerTitle: {
@@ -130,6 +142,12 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: 13,
     marginTop: 4,
+  },
+  roleLine: {
+    color: theme.colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 8,
   },
   ghostButton: {
     paddingHorizontal: 12,
@@ -258,5 +276,10 @@ const styles = StyleSheet.create({
   outlineButtonText: {
     color: theme.colors.primary,
     fontWeight: '700',
+  },
+  emptyText: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

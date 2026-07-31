@@ -91,6 +91,46 @@ export function getDocumentView(documentId) {
   });
 }
 
+export function createApprovalRequest(documentId, payload) {
+  return apiRequest(`/api/documents/${documentId}/approval-requests`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'x-client-channel': 'mobile',
+    },
+  });
+}
+
+export function decideApprovalRequest(requestId, payload) {
+  return apiRequest(`/api/approval-requests/${requestId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'x-client-channel': 'mobile',
+    },
+  });
+}
+
+export function createSignatureRequest(documentId, payload) {
+  return apiRequest(`/api/documents/${documentId}/signature-requests`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'x-client-channel': 'mobile',
+    },
+  });
+}
+
+export function signSignatureRequest(requestId, payload) {
+  return apiRequest(`/api/signature-requests/${requestId}/sign`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: {
+      'x-client-channel': 'mobile',
+    },
+  });
+}
+
 export function rejectMobileDownload() {
   throw new Error('La descarga de documentos no esta permitida en la aplicacion movil.');
 }

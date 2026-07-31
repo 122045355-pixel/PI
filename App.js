@@ -6,15 +6,27 @@ import DocumentsScreen from './screens/DocumentsScreen';
 import TeamsScreen from './screens/TeamsScreen';
 import DocumentDetailScreen from './screens/DocumentDetailScreen';
 import LoginScreen from './screens/LoginScreen';
-import { getCaseDocuments, getCases, getDocumentView, getProfile, login, logout } from './services/apiClient';
+import RoleActionsScreen from './screens/RoleActionsScreen';
+import {
+  createApprovalRequest,
+  createSignatureRequest,
+  decideApprovalRequest,
+  getCaseDocuments,
+  getCases,
+  getDocumentView,
+  getProfile,
+  login,
+  logout,
+  signSignatureRequest,
+} from './services/apiClient';
 import theme from './theme';
 
 const rolePermissions = {
   interesado: ['Ver documentos personales propios', 'Ver libelos propios', 'Firmar cuando sea solicitado'],
   testigo: ['Ver identificacion propia', 'Ver libelos propios', 'Firmar cuando sea solicitado'],
   abogado: ['Ver libelos de clientes asignados', 'Consultar estado de expediente'],
-  juez: ['Ver casos activos', 'Firmar documentos asignados', 'Descarga solo en web'],
-  notario: ['Acceso documental completo', 'Firmar y autorizar', 'Descarga solo en web'],
+  juez: ['Ver casos activos', 'Autorizar documentos', 'Firmar documentos asignados', 'Descarga solo en web'],
+  notario: ['Acceso documental completo', 'Autorizar documentos', 'Firmar y solicitar multifirma', 'Descarga solo en web'],
   admin_ti: ['Gestion tecnica', 'Auditoria operativa', 'Sin descarga movil'],
   admin: ['Gestion tecnica', 'Auditoria operativa', 'Sin descarga movil'],
 };
@@ -78,13 +90,15 @@ export default function App() {
       });
       setCases(allowedCases);
       setDocuments(visibleDocuments);
-      setSelectedDocumentId(visibleDocuments[0]?.id || null);
+      setSelectedDocumentId((currentSelectedId) => currentSelectedId || visibleDocuments[0]?.id || null);
+      return visibleDocuments;
     } catch (loadError) {
       await logout();
       setCurrentUser(null);
       setCases([]);
       setDocuments([]);
       setError(loadError.message || 'No fue posible cargar la sesion.');
+      return [];
     } finally {
       setLoading(false);
     }
@@ -151,6 +165,30 @@ export default function App() {
     } catch (viewError) {
       setError(viewError.message || 'No tienes permiso para visualizar este documento.');
     }
+  };
+
+  const createApproval = async (documentId, payload) => {
+    const result = await createApprovalRequest(documentId, payload);
+    await loadProtectedData();
+    return result;
+  };
+
+  const decideApproval = async (requestId, payload) => {
+    const result = await decideApprovalRequest(requestId, payload);
+    await loadProtectedData();
+    return result;
+  };
+
+  const createSignature = async (documentId, payload) => {
+    const result = await createSignatureRequest(documentId, payload);
+    await loadProtectedData();
+    return result;
+  };
+
+  const signRequest = async (requestId, payload) => {
+    const result = await signSignatureRequest(requestId, payload);
+    await loadProtectedData();
+    return result;
   };
 
   const goToDocuments = () => {
@@ -224,6 +262,18 @@ export default function App() {
           />
         )}
 
+        {activeView === 'actions' && (
+          <RoleActionsScreen
+            currentUser={currentUser}
+            documents={documents}
+            onNavigateHome={goHome}
+            onCreateApproval={createApproval}
+            onDecideApproval={decideApproval}
+            onCreateSignatureRequest={createSignature}
+            onSignRequest={signRequest}
+          />
+        )}
+
         {activeView === 'detail' && selectedDocument && (
           <DocumentDetailScreen
             document={selectedDocument}
@@ -240,6 +290,7 @@ export default function App() {
             { id: 'dashboard', label: 'Inicio' },
             { id: 'documents', label: 'Documentos' },
             { id: 'teams', label: 'Casos' },
+            { id: 'actions', label: 'Acciones' },
           ].map((item) => (
             <Pressable
               key={item.id}
@@ -298,7 +349,7 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 12,
     backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
@@ -310,7 +361,7 @@ const styles = StyleSheet.create({
   },
   navItem: {
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     borderRadius: 999,
   },
   navItemActive: {
@@ -319,6 +370,7 @@ const styles = StyleSheet.create({
   navItemText: {
     color: theme.colors.muted,
     fontWeight: '600',
+    fontSize: 12,
   },
   navItemTextActive: {
     color: theme.colors.surface,

@@ -3,64 +3,78 @@ import theme from '../theme';
 
 const statusStyles = {
   approved: { label: 'Aprobado', color: theme.colors.success, background: '#dcfce7' },
-  pending_review: { label: 'En revisión', color: theme.colors.warning, background: '#fef3c7' },
+  pending_review: { label: 'En revision', color: theme.colors.warning, background: '#fef3c7' },
+  under_review: { label: 'En revision', color: theme.colors.warning, background: '#fef3c7' },
+  uploaded: { label: 'Cargado', color: theme.colors.info, background: '#ccfbf1' },
+  signature_pending: { label: 'Firma pendiente', color: theme.colors.warning, background: '#fef3c7' },
+  signed: { label: 'Firmado', color: theme.colors.success, background: '#dcfce7' },
+  rejected: { label: 'Rechazado', color: theme.colors.danger, background: '#fee2e2' },
   draft: { label: 'Borrador', color: theme.colors.muted, background: theme.colors.surfaceMuted },
 };
 
 export default function DashboardScreen({
   documents,
   teams,
+  currentUser,
+  onLogout,
   onNavigateHome,
   onNavigateToDocuments,
   onNavigateToTeams,
   onOpenDocument,
 }) {
   const approvedCount = documents.filter((doc) => doc.status === 'approved').length;
-  const pendingCount = documents.filter((doc) => doc.status === 'pending_review').length;
-  const signedCount = documents.filter((doc) => doc.signatures.length > 0).length;
+  const pendingCount = documents.filter((doc) => ['pending_review', 'under_review', 'signature_pending'].includes(doc.status)).length;
+  const signedCount = documents.filter((doc) => doc.status === 'signed' || doc.signatures.length > 0).length;
   const recentDocuments = [...documents].slice(0, 4);
 
   const renderHeader = (title, subtitle) => (
     <View style={styles.headerCard}>
-      <View>
-        <Text style={styles.headerEyebrow}>Gestión documental</Text>
+      <View style={styles.headerCopy}>
+        <Text style={styles.headerEyebrow}>Gestion documental</Text>
         <Text style={styles.headerTitle}>{title}</Text>
         <Text style={styles.headerSubtitle}>{subtitle}</Text>
       </View>
-      <Pressable style={styles.ghostButton} onPress={onNavigateHome}>
-        <Text style={styles.ghostButtonText}>Inicio</Text>
+      <Pressable style={styles.ghostButton} onPress={onLogout || onNavigateHome}>
+        <Text style={styles.ghostButtonText}>Salir</Text>
       </Pressable>
     </View>
   );
 
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      {renderHeader('Panel de control', 'Revisa el estado de tus documentos, equipos y aprobaciones.')}
+      {renderHeader('Panel de control', 'Documentos permitidos por rol y expediente.')}
 
       <View style={styles.heroCard}>
         <View style={styles.heroTextWrap}>
-          <Text style={styles.heroEyebrow}>Flujos de validación</Text>
-          <Text style={styles.heroTitle}>Control de versiones y firmas digitales</Text>
-          <Text style={styles.heroText}>
-            Diseña, valida y firma documentos con una experiencia limpia para web y móvil.
-          </Text>
+          <Text style={styles.heroEyebrow}>Sesion autorizada</Text>
+          <Text style={styles.heroTitle}>{currentUser?.name}</Text>
+          <Text style={styles.heroText}>{currentUser?.email}</Text>
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleBadgeText}>Rol: {currentUser?.role}</Text>
+          </View>
+        </View>
+        <View style={styles.permissionList}>
+          {(currentUser?.permissions || []).map((permission) => (
+            <Text key={permission} style={styles.permissionText}>• {permission}</Text>
+          ))}
+          <Text style={styles.permissionText}>• Descarga de archivos bloqueada en movil</Text>
         </View>
         <View style={styles.heroActions}>
           <Pressable style={styles.primaryButton} onPress={onNavigateToDocuments}>
             <Text style={styles.primaryButtonText}>Ver documentos</Text>
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={onNavigateToTeams}>
-            <Text style={styles.secondaryButtonText}>Ir a equipos</Text>
+            <Text style={styles.secondaryButtonText}>Ver casos</Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.statsRow}>
         {[
-          { label: 'Documentos', value: documents.length, accent: theme.colors.primary },
+          { label: 'Visibles', value: documents.length, accent: theme.colors.primary },
           { label: 'Aprobados', value: approvedCount, accent: theme.colors.success },
           { label: 'Pendientes', value: pendingCount, accent: theme.colors.warning },
-          { label: 'Firmas', value: signedCount, accent: theme.colors.secondary },
+          { label: 'Firmados', value: signedCount, accent: theme.colors.secondary },
         ].map((item) => (
           <View key={item.label} style={styles.statCard}>
             <Text style={[styles.statValue, { color: item.accent }]}>{item.value}</Text>
@@ -76,21 +90,26 @@ export default function DashboardScreen({
             <Text style={styles.linkText}>Ver todos</Text>
           </Pressable>
         </View>
-        {recentDocuments.map((doc) => (
-          <Pressable key={doc.id} style={styles.listItem} onPress={() => onOpenDocument(doc)}>
-            <View style={styles.listItemInfo}>
-              <Text style={styles.listItemTitle}>{doc.title}</Text>
-              <Text style={styles.listItemSubtitle}>{doc.teamName} · v{doc.currentVersion}</Text>
-            </View>
-            <Text style={styles.listItemMeta}>{doc.updatedAt}</Text>
-          </Pressable>
-        ))}
+        {recentDocuments.length === 0 ? (
+          <Text style={styles.emptyText}>La API no devolvio documentos visibles para este rol.</Text>
+        ) : recentDocuments.map((doc) => {
+          const status = statusStyles[doc.status] || statusStyles.draft;
+          return (
+            <Pressable key={doc.id} style={styles.listItem} onPress={() => onOpenDocument(doc)}>
+              <View style={styles.listItemInfo}>
+                <Text style={styles.listItemTitle}>{doc.title}</Text>
+                <Text style={styles.listItemSubtitle}>{doc.teamName} · v{doc.currentVersion}</Text>
+              </View>
+              <Text style={[styles.listItemMeta, { color: status.color }]}>{status.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Equipos activos</Text>
-          <Text style={styles.linkText}>{teams.length} equipos</Text>
+          <Text style={styles.sectionTitle}>Casos visibles</Text>
+          <Text style={styles.linkText}>{teams.length} casos</Text>
         </View>
         {teams.map((team) => (
           <View key={team.id} style={styles.timelineCard}>
@@ -124,11 +143,14 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 6,
   },
+  headerCopy: {
+    flex: 1,
+    marginRight: 10,
+  },
   headerEyebrow: {
     color: theme.colors.primary,
     fontSize: 12,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
     marginBottom: 4,
   },
   headerTitle: {
@@ -166,7 +188,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   heroTextWrap: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   heroEyebrow: {
     color: theme.colors.primary,
@@ -185,6 +207,31 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
+  },
+  roleBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  roleBadgeText: {
+    color: theme.colors.primary,
+    fontWeight: '800',
+  },
+  permissionList: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: theme.colors.surfaceMuted,
+    marginBottom: 14,
+  },
+  permissionText: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
   },
   heroActions: {
     flexDirection: 'row',
@@ -266,32 +313,34 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: theme.colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 13,
   },
   listItem: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.surfaceMuted,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   listItemInfo: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
   },
   listItemTitle: {
     color: theme.colors.textPrimary,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   listItemSubtitle: {
     color: theme.colors.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
   },
   listItemMeta: {
     color: theme.colors.muted,
     fontSize: 12,
+    fontWeight: '700',
   },
   timelineCard: {
     backgroundColor: theme.colors.surface,
@@ -309,5 +358,10 @@ const styles = StyleSheet.create({
   timelineText: {
     color: theme.colors.textSecondary,
     fontSize: 13,
+  },
+  emptyText: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

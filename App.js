@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import DashboardScreen from './screens/DashboardScreen';
@@ -63,7 +63,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [cases, setCases] = useState([]);
   const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const loadProtectedData = async () => {
@@ -90,7 +90,8 @@ export default function App() {
       });
       setCases(allowedCases);
       setDocuments(visibleDocuments);
-      setSelectedDocumentId((currentSelectedId) => currentSelectedId || visibleDocuments[0]?.id || null);
+      setSelectedDocumentId(visibleDocuments[0]?.id || null);
+      setActiveView('dashboard');
       return visibleDocuments;
     } catch (loadError) {
       await logout();
@@ -103,10 +104,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadProtectedData();
-  }, []);
 
   const teams = useMemo(() => {
     return cases.map((caseItem) => ({

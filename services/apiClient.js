@@ -1,19 +1,59 @@
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 const TOKEN_KEY = 'legal_docs_access_token';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 const API_KEY = process.env.EXPO_PUBLIC_API_KEY;
 
+let memoryToken = null;
+
+function hasWebStorage() {
+  return typeof globalThis !== 'undefined' && Boolean(globalThis.localStorage);
+}
+
+function canUseSecureStore() {
+  return Platform.OS !== 'web'
+    && typeof SecureStore?.setItemAsync === 'function'
+    && typeof SecureStore?.getItemAsync === 'function'
+    && typeof SecureStore?.deleteItemAsync === 'function';
+}
+
 export async function saveAccessToken(token) {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  memoryToken = token;
+
+  if (Platform.OS === 'web' && hasWebStorage()) {
+    globalThis.localStorage.setItem(TOKEN_KEY, token);
+    return;
+  }
+
+  if (canUseSecureStore()) {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  }
 }
 
 export async function getAccessToken() {
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  if (Platform.OS === 'web' && hasWebStorage()) {
+    return globalThis.localStorage.getItem(TOKEN_KEY);
+  }
+
+  if (canUseSecureStore()) {
+    return SecureStore.getItemAsync(TOKEN_KEY);
+  }
+
+  return memoryToken;
 }
 
 export async function clearAccessToken() {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  memoryToken = null;
+
+  if (Platform.OS === 'web' && hasWebStorage()) {
+    globalThis.localStorage.removeItem(TOKEN_KEY);
+    return;
+  }
+
+  if (canUseSecureStore()) {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  }
 }
 
 async function buildHeaders(options = {}) {
